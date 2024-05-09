@@ -16,6 +16,10 @@ int TotalRevenue=0;
 int FailedOrders=0;
 int AcceptedOrders=0; 
 
+pthread_mutex_t OutputLock, StatisticsLock, PaymentLock, TeleLock, CookLock, OvenLock, DelivererLock;
+
+pthread_cond_t AvailableCallerCond, AvailableDelivererCond, AvailableOvenCond, AvailableCookCond, AvailableTeleCond;
+
 //Propabilities
 #define P_M 0.35
 #define P_P 0.25

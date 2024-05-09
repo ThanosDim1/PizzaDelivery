@@ -1,17 +1,10 @@
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include "PizzaDelivery.h"
-
-pthread_mutex_t OutputLock, StatisticsLock, PaymentLock;
-
-pthread_cond_t AvailableCallerCond, AvailableDelivererCond, AvailableOvenCond, AvailableCookCond;
 
 int Cookers = N_COOK;
 int Oven = N_OVEN;
 int Callers = N_TEL;
 int Deliverer = N_DELIVERER;
+int Tele = N_TEL;
 
 // Initializes mutex, prints message if initialization failed and exits with code -1. Used in main() only.
 void initializeMutex(pthread_mutex_t *mutex){
@@ -30,18 +23,18 @@ void initializeCondition(pthread_cond_t *cond){
 }
 
 // Acquires lock, if acquisition fails then id of thread is printed and program exits.
-void acquireLock(pthread_mutex_t *mutex, int oid, void* t){
+void acquireLock(pthread_mutex_t *mutex, int *id){
     if (pthread_mutex_lock(mutex) != 0){
-        printf("ERROR: pthread_mutex_lock() failed in thread %d\n", oid);
-        exit(t);
+        printf("ERROR: pthread_mutex_lock() failed in thread %d\n", *id);
+        exit(-1);
     }
 }
 
 // Releases lock, if release fails then id of thread is printed and program exits.
-void releaseLock(pthread_mutex_t *mutex, int oid, void* t){
+void releaseLock(pthread_mutex_t *mutex, int *id){
     if (pthread_mutex_unlock(mutex) != 0){
-        printf("ERROR: pthread_mutex_unlock() failed in thread %d\n", oid);
-        exit(t);
+        printf("ERROR: pthread_mutex_unlock() failed in thread %d\n", *id);
+        exit(-1);
     }
 }
 
@@ -66,9 +59,7 @@ typedef struct order {
     int TotalPizzas;
 }order;
 
-int CumulativeProb(void* args){
-    
-    unsigned int* seed = (unsigned int*) args;
+int CumulativeProb(unsigned int* seed){
     
     float PP[3] = {0.35, 0.25, 0.4};
     // Generate a random number between 0 and 1
@@ -84,26 +75,30 @@ int CumulativeProb(void* args){
             return i;
         }
     }
-}
-
-int PaymentFail(void* args){
-    unsigned int* seed = (unsigned int*) args;
-    // uniE(Uniform[0,1])
-    double uni = (double) rand_r(seed) / RAND_MAX;
-
-    if (uni < P_FAIL) return 1;
 
     return 0;
 }
+
+int PaymentFail(unsigned int* seed){
+    // Generate random probability between 0 and 1
+    double uni = (double) rand_r(seed) / RAND_MAX;
+
+    // Check if the generated probability indicates payment failure
+    if (uni < P_FAIL) 
+        return 1;
+    else 
+        return 0;
+}
+
 
 void PizzaServices(int* id){
     
     order newOrder;
 
-    unsigned int newseed = seed + id;
+    unsigned int newseed = seed + *id;
     unsigned int wait;
 
-    newOrder.TotalPizzas = (rand_r(&seed) % (N_ORDERHIGH - N_ORDERLOW + 1)) + N_ORDERLOW;
+    newOrder.TotalPizzas = (rand_r(newseed) % (N_ORDERHIGH - N_ORDERLOW + 1)) + N_ORDERLOW;
 
     newOrder.MargaritaPizza=0;
     newOrder.PepperoniPizza=0;
@@ -125,16 +120,86 @@ void PizzaServices(int* id){
             break;
         }
     }
+
+    acquireLock(&OutputLock, *id);
+
+    acquireLock(&PaymentLock, *id);
     
-    wait = (rand_r(&newseed) % (T_PAYMENTHIGH - T_PAYMENTLOW + 1)) + T_PAYMENTLOW;
+    wait = (rand_r(newseed) % (T_PAYMENTHIGH - T_PAYMENTLOW + 1)) + T_PAYMENTLOW;
     sleep(wait);
 
     if (PaymentFail(&newseed)){
+        
         printf("Order %d: Payment failed.\n", *id);
+
+        FailedOrders++;
+        releaseLock(&OutputLock, *id);
+        releaseLock(&PaymentLock, *id);
+
+        pthread_exit(NULL);
+
     }
     else{
+
         printf("Order %d: Payment successful.\n", *id);
+        AcceptedOrders++;
+
+        MargaritaPizzaCount += newOrder.MargaritaPizza;
+        SpecialPizzaCount += newOrder.SpecialPizza;
+        PeperoniPizzaCount += newOrder.PepperoniPizza;
+        
+        TotalRevenue += newOrder.MargaritaPizza * C_M + newOrder.PepperoniPizza * C_P + newOrder.SpecialPizza * C_S;
+
+        releaseLock(OutputLock, *id);
+        releaseLock(PaymentLock, *id);
     } 
+
+    while (Cookers == 0){
+        pthread_cond_wait(AvailableCookCond,CookLock);
+    }
+
+    acquireLock(CookLock, *id);
+
+    Cookers --;
+
+    sleep(T_PREP * newOrder.TotalPizzas);
+
+    Cookers ++;
+
+    releaseLock(CookLock, *id);
+    pthread_cond_singal(AvailableCookCond);
+
+    acquireLock(OvenLock, *id);
+
+    while (Oven < newOrder.TotalPizzas){
+        pthread_cond_wait(AvailableOvenCond,OvenLock);
+    }
+
+    Oven -= newOrder.TotalPizzas;
+
+    sleep(T_BAKE);
+
+    Oven += newOrder.TotalPizzas;
+
+    releaseLock(OvenLock, *id);
+    pthread_cond_signal(AvailableOvenCond);
+
+    acquireLock(DelivererLock, *id);
+
+    while  (Deliverer == 0){
+        pthread_cond_wait(AvailableDelivererCond,DelivererLock);
+    }
+
+    Deliverer --;
+
+    wait = (rand_r(newseed) % (T_DELLHIGH - T_DELLOW + 1)) + T_DELLHIGH;
+
+    sleep(T_PACK * newOrder.TotalPizzas + 2 * wait);
+
+    Deliverer ++;
+
+    releaseLock(DelivererLock, *id);
+    pthread_cond_signal(AvailableDelivererCond);
 }
 
 
@@ -155,5 +220,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+    //EDO THA XEIRIZOMASTE TOUS TILEFONITES
 
+    
 }
