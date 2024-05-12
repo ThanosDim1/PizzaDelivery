@@ -5,6 +5,8 @@ int Oven = N_OVEN;
 int Callers = N_TEL;
 int Deliverer = N_DELIVERER;
 int Tele = N_TEL;
+int totalPizzaTime = 0;
+int totalPizzaTimeUntilPack = 0;
 
 // Initializes mutex, prints message if initialization failed and exits with code -1. Used in main() only.
 void initializeMutex(pthread_mutex_t *mutex){
@@ -128,6 +130,9 @@ void PizzaServices(int* id){
     wait = (rand_r(newseed) % (T_PAYMENTHIGH - T_PAYMENTLOW + 1)) + T_PAYMENTLOW;
     sleep(wait);
 
+    totalPizzaTime += wait;
+    totalPizzaTimeUntilPack = totalPizzaTime;
+
     if (PaymentFail(&newseed)){
         
         printf("Order %d: Payment failed.\n", *id);
@@ -161,6 +166,9 @@ void PizzaServices(int* id){
     acquireLock(CookLock, *id);
 
     Cookers --;
+    
+    totalPizzaTime += T_PREP * newOrder.TotalPizzas;
+    totalPizzaTimeUntilPack = totalPizzaTime;
 
     sleep(T_PREP * newOrder.TotalPizzas);
 
@@ -177,6 +185,9 @@ void PizzaServices(int* id){
 
     Oven -= newOrder.TotalPizzas;
 
+    totalPizzaTime += T_BAKE;
+    totalPizzaTimeUntilPack = totalPizzaTime;
+
     sleep(T_BAKE);
 
     Oven += newOrder.TotalPizzas;
@@ -191,15 +202,27 @@ void PizzaServices(int* id){
     }
 
     Deliverer --;
+    
+    totalPizzaTimeUntilPack = totalPizzaTime+T_PACK;
+    totalPizzaTime += T_PACK * newOrder.TotalPizzas + 2 * wait;
+    
 
     wait = (rand_r(newseed) % (T_DELLHIGH - T_DELLOW + 1)) + T_DELLHIGH;
 
+    printf("Order %d: Packed in %d: minutes", *id, totalPizzaTimeUntilPack );
+
     sleep(T_PACK * newOrder.TotalPizzas + 2 * wait);
 
+    printf ("Order %d: Delivered in %d minutes.\n", *id, totalPizzaTime);
+    
     Deliverer ++;
 
     releaseLock(DelivererLock, *id);
     pthread_cond_signal(AvailableDelivererCond);
+
+    
+
+
 }
 
 
