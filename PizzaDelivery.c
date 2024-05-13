@@ -187,8 +187,8 @@ void *simulateServiceFunc(void *t){
         
         TotalRevenue += newOrder.MargaritaPizza * C_M + newOrder.PepperoniPizza * C_P + newOrder.SpecialPizza * C_S;
 
-        releaseLock(OutputLock, *id,t);
-        releaseLock(PaymentLock, *id,t);
+        releaseLock(&OutputLock, *id,t);
+        releaseLock(&PaymentLock, *id,t);
     
         orderPriority = priority++; // assign order priority id to order, happens here because failed orders should not receive one.
     }
