@@ -1,9 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h> 
-#include <pthread.h>
-
-int customers;
 int seed;
 float AverageWaitTime;
 int MaxWaitTime;
@@ -17,8 +11,9 @@ int FailedOrders=0;
 int AcceptedOrders=0; 
 
 pthread_mutex_t OutputLock, StatisticsLock, PaymentLock, TeleLock, CookLock, OvenLock, DelivererLock;
-
 pthread_cond_t AvailableCallerCond, AvailableDelivererCond, AvailableOvenCond, AvailableCookCond, AvailableTeleCond;
+pthread_mutex_t cookPriorityLock, ovenPriorityLock, delivererPriorityLock;
+pthread_cond_t cookPriorityCond, ovenPriorityCond, delivererPriorityCond;
 
 //Propabilities
 #define P_M 0.35
@@ -36,7 +31,7 @@ pthread_cond_t AvailableCallerCond, AvailableDelivererCond, AvailableOvenCond, A
 #define T_BAKE 10
 #define T_PACK 1
 #define T_DELLOW 5
-#define T_DELLHIGH 15  
+#define T_DELHIGH 15  
 #define T_PAYMENTLOW 1
 #define T_PAYMENTHIGH 3
 #define T_ORDERLOW 1
