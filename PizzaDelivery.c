@@ -500,7 +500,12 @@ int main(int argc, char *argv[])
     // Create threads.
     int i;
     int wait = 0;
-    int oids[customers];
+    int *oids = (pthread_t *)malloc(customers * sizeof(pthread_t));
+    if (threads == NULL)
+    {
+        printf("Out of memory!");
+        exit(-1);
+    }
 
     for (i = 0; i < customers; i++)
     {
