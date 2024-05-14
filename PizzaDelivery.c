@@ -112,43 +112,6 @@ int CumulativeProb(unsigned int *seed)
     return 0;
 }
 
-// Caller function
-void *callerFunc(void *t)
-{
-    int *id = (int *)t;
-
-    while (1)
-    {
-        acquireLock(&TeleLock, *id, t);
-
-        // Check if there are available callers
-        if (Callers > 0)
-        {
-            Callers--;
-            releaseLock(&TeleLock, *id, t);
-            break;
-        }
-        else
-        {
-            releaseLock(&TeleLock, *id, t);
-            // If no available callers, wait
-            pthread_cond_wait(&AvailableTeleCond, &TeleLock);
-        }
-    }
-
-    // Simulate call processing time
-    int wait = (rand_r(&seed) % (T_ORDERHIGH - T_ORDERLOW + 1)) + T_ORDERLOW;
-    sleep(wait);
-
-    // After processing call, release caller
-    acquireLock(&TeleLock, *id, t);
-    Callers++;
-    releaseLock(&TeleLock, *id, t);
-    pthread_cond_signal(&AvailableTeleCond);
-
-    pthread_exit(NULL);
-}
-
 // Returns 1 with a probability of p and 0 with a probability of 1-p.
 int PaymentFail(unsigned int *seed)
 {
@@ -232,6 +195,7 @@ void *simulateServiceFunc(void *t)
     else
     {
         printf("Order %d: Payment successful.\n", *id);
+        printf("Order %d: %d Margarita, %d Pepperoni, %d Special pizzas ordered.\n", *id, newOrder.MargaritaPizza, newOrder.PepperoniPizza, newOrder.SpecialPizza);
         AcceptedOrders++;
 
         MargaritaPizzaCount += newOrder.MargaritaPizza;
@@ -250,13 +214,6 @@ void *simulateServiceFunc(void *t)
 
     /* START OF PART 3*/
 
-    // Enforce FCFS policy.
-    acquireLock(&cookPriorityLock, *id, t);
-    while (cookPriority != orderPriority)
-    {
-        pthread_cond_wait(&cookPriorityCond, &cookPriorityLock);
-    }
-
     while (Cookers == 0)
     {
         pthread_cond_wait(&AvailableCookCond, &CookLock);
@@ -267,58 +224,15 @@ void *simulateServiceFunc(void *t)
     Cookers -= 1;
 
     releaseLock(&CookLock, *id, t);
-    cookPriority += 1;
-    releaseLock(&cookPriorityLock, *id, t);
-    pthread_cond_broadcast(&cookPriorityCond); // Notify other threads that they can "compete" for a cook. (Obv. thread with higher priority)
+    pthread_cond_broadcast(&AvailableCookCond);
 
     // Simulate pizza preparation time.
     sleep(T_PREP * newOrder.TotalPizzas);
 
-    /* END OF PART 3*/
-
-    // Caller Priority Update
-    pthread_mutex_lock(&TelePriorityLock);
-    int callPriority = TelePriority;
-    releaseLock(&TelePriorityLock, *id, t);
-
-    // Enforce FCFS policy for callers
-    while (1)
-    {
-        acquireLock(&TelePriorityLock, *id, t);
-        if (callPriority == TelePriority)
-        {
-            releaseLock(&TelePriorityLock, *id, t);
-            break;
-        }
-        else
-        {
-            releaseLock(&TelePriorityLock, *id, t);
-            pthread_cond_wait(&TelePriorityCond, &TelePriorityLock);
-        }
-    }
-
-    // Simulate caller processing time
-    printf("Order %d: Call processing started.\n", *id);
-    wait = (rand_r(&newseed) % (T_PAYMENTHIGH - T_PAYMENTLOW + 1)) + T_PAYMENTLOW;
-    sleep(wait);
-    printf("Order %d: Call processing finished.\n", *id);
-
-    // After processing call, update caller priority
-    acquireLock(&TelePriorityLock, *id, t);
-    TelePriority++;
-    releaseLock(&TelePriorityLock, *id, t);
-    pthread_cond_broadcast(&TelePriorityCond);
-
-    pthread_exit(NULL);
-
-    /* START OF PART 4 */
-
-    // Enforce FCFS policy.
-    acquireLock(&ovenPriorityLock, *id, t);
-    while (orderPriority != ovenPriority)
-    {
-        pthread_cond_wait(&ovenPriorityCond, &ovenPriorityLock);
-    }
+    acquireLock(&CookLock, *id, t);
+    Cookers += 1;
+    releaseLock(&CookLock, *id, t);
+    pthread_cond_broadcast(&AvailableCookCond); // At most one thread is waiting for cook at each point in time. (FCFS Policy)
 
     // Get enough ovens. (one for each pizza ordered)
     acquireLock(&OvenLock, *id, t);
@@ -331,21 +245,15 @@ void *simulateServiceFunc(void *t)
 
     Oven -= newOrder.TotalPizzas;
     releaseLock(&OvenLock, *id, t);
-
-    ovenPriority += 1;
-
-    releaseLock(&ovenPriorityLock, *id, t);
-    pthread_cond_broadcast(&ovenPriorityCond); // Notify other threads that they can "compete" for ovens. (Obv. thread with higher priority)
-
-    // After ovens have been acquired, release cook.
-    acquireLock(&CookLock, *id, t);
-    Cookers += 1;
-    releaseLock(&CookLock, *id, t);
-    pthread_cond_signal(&AvailableCookCond); // At most one thread is waiting for cook at each point in time. (FCFS Policy)
+    pthread_cond_signal(&AvailableOvenCond);
 
     // Simulate baking time.
     sleep(T_BAKE);
 
+    acquireLock(&OvenLock, *id, t);
+    Oven += newOrder.TotalPizzas;
+    releaseLock(&OvenLock, *id, t);
+    pthread_cond_signal(&AvailableOvenCond);
     // Get time when baking finished.
     clock_gettime(CLOCK_REALTIME, &timeFinishedBaking);
 
@@ -362,13 +270,10 @@ void *simulateServiceFunc(void *t)
     clock_gettime(CLOCK_REALTIME, &timeFinishedPacking);
 
     // Release ovens now that packing is complete.
-    acquireLock(&OvenLock, *id, t);
-    Oven += newOrder.TotalPizzas;
-    releaseLock(&OvenLock, *id, t);
-    pthread_cond_signal(&AvailableOvenCond); // At most one thread is waiting for ovens at each point in time (FCFS Policy).
+    // At most one thread is waiting for ovens at each point in time (FCFS Policy).
 
     // Print message stating total time for order with <oid> to get ready. (time from customer order up to time packing was finished)
-    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0;
+    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9);
     acquireLock(&OutputLock, *id, t);
     printf("Order with number %d was prepared in %f minutes.\n", *id, orderPreparationTimeMinutes);
     releaseLock(&OutputLock, *id, t);
@@ -377,26 +282,15 @@ void *simulateServiceFunc(void *t)
 
     /* START OF PART 6 */
 
-    // Enforce FCFS policy.
-    acquireLock(&delivererPriorityLock, *id, t);
-    while (orderPriority != delivererPriority)
-    {
-        pthread_cond_wait(&delivererPriorityCond, &delivererPriorityLock);
-    }
-
     // Acquire deliverer.
     acquireLock(&DelivererLock, *id, t);
     while (Deliverer == 0)
     {
         pthread_cond_wait(&AvailableDelivererCond, &DelivererLock);
     }
+
     Deliverer -= 1;
     releaseLock(&DelivererLock, *id, t);
-
-    // Once deliverer has been acquired.
-    delivererPriority += 1;
-    releaseLock(&delivererPriorityLock, *id, t);
-    pthread_cond_broadcast(&delivererPriorityCond); // Notify other threads that they can "compete" for a deliverer. (Obv. thread with higher priority)
 
     // Simulate time for deliverer to reach customer.
     wait = (rand_r(&newseed) % (T_DELHIGH - T_DELLOW + 1)) + T_DELLOW;
@@ -500,7 +394,7 @@ int main(int argc, char *argv[])
     // Create threads.
     int i;
     int wait = 0;
-    int *oids = (pthread_t *)malloc(customers * sizeof(pthread_t));
+    int *oids = (int *)malloc(customers * sizeof(int));
     if (threads == NULL)
     {
         printf("Out of memory!");

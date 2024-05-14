@@ -10,10 +10,10 @@ int TotalRevenue = 0;
 int FailedOrders = 0;
 int AcceptedOrders = 0;
 
-pthread_mutex_t OutputLock, StatisticsLock, PaymentLock, TeleLock, CookLock, OvenLock, DelivererLock;
-pthread_cond_t AvailableTeleCond, AvailableDelivererCond, AvailableOvenCond, AvailableCookCond, AvailableTeleCond;
-pthread_mutex_t TelePriorityLock, cookPriorityLock, ovenPriorityLock, delivererPriorityLock;
-pthread_cond_t TelePriorityCond, cookPriorityCond, ovenPriorityCond, delivererPriorityCond;
+pthread_mutex_t OutputLock, StatisticsLock, PaymentLock, CallerLock, CookLock, OvenLock, DelivererLock;
+pthread_cond_t AvailableDelivererCond, AvailableOvenCond, AvailableCookCond, AvailableCallerCond;
+pthread_mutex_t CallerPriorityLock, cookPriorityLock, ovenPriorityLock, delivererPriorityLock;
+pthread_cond_t CallerPriorityCond, cookPriorityCond, ovenPriorityCond, delivererPriorityCond;
 
 // Propabilities
 #define P_M 0.35
