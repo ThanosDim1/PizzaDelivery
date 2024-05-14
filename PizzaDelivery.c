@@ -23,62 +23,75 @@ double maxCoolingTime = 0;
 double orderCompletionTimeSum = 0;
 double coolingTimeSum = 0;
 
-typedef struct order {
+typedef struct order
+{
     int MargaritaPizza;
     int PepperoniPizza;
     int SpecialPizza;
     int TotalPizzas;
-}order;
-
+} order;
 
 // Initializes mutex, prints message if initialization failed and exits with code -1. Used in main() only.
-void initializeMutex(pthread_mutex_t *mutex){
-    if (pthread_mutex_init(mutex, NULL) != 0){
+void initializeMutex(pthread_mutex_t *mutex)
+{
+    if (pthread_mutex_init(mutex, NULL) != 0)
+    {
         printf("ERROR: pthread_mutex_init() failed in main()\n");
         exit(-1);
     }
 }
 
 // Initializes conds, prints message if initialization failed and exits with code -1. Used in main() only.
-void initializeCondition(pthread_cond_t *cond){
-    if (pthread_cond_init(cond, NULL) != 0){
+void initializeCondition(pthread_cond_t *cond)
+{
+    if (pthread_cond_init(cond, NULL) != 0)
+    {
         printf("ERROR: pthread_cond_init() failed in main()\n");
         exit(-1);
     }
 }
 
 // Acquires lock, if acquisition fails then id of thread is printed and program exits.
-void acquireLock(pthread_mutex_t *mutex, int oid, void* t){
-    if (pthread_mutex_lock(mutex) != 0){
+void acquireLock(pthread_mutex_t *mutex, int oid, int *t)
+{
+    if (pthread_mutex_lock(mutex) != 0)
+    {
         printf("ERROR: pthread_mutex_lock() failed in thread %d\n", oid);
-        exit(t);
+        exit(*t);
     }
 }
 
 // Releases lock, if release fails then id of thread is printed and program exits.
-void releaseLock(pthread_mutex_t *mutex, int oid, void* t){
-    if (pthread_mutex_unlock(mutex) != 0){
+void releaseLock(pthread_mutex_t *mutex, int oid, int *t)
+{
+    if (pthread_mutex_unlock(mutex) != 0)
+    {
         printf("ERROR: pthread_mutex_unlock() failed in thread %d\n", oid);
-        exit(t);
+        exit(*t);
     }
 }
 
 // Destroys lock, if destruction fails it prints a message and exits with code -1. Used in main() only.
-void destroyLock(pthread_mutex_t *mutex){
-    if (pthread_mutex_destroy(mutex) != 0){
+void destroyLock(pthread_mutex_t *mutex)
+{
+    if (pthread_mutex_destroy(mutex) != 0)
+    {
         printf("ERROR: pthread_mutex_destroy() failed in main()\n");
-    } 
+    }
 }
 
 // Destroys cond, if destruction fails it prints a message and exits with code -1. Used in main() only.
-void destroyCond(pthread_cond_t *cond){
-    if (pthread_cond_destroy(cond) != 0){
+void destroyCond(pthread_cond_t *cond)
+{
+    if (pthread_cond_destroy(cond) != 0)
+    {
         printf("ERROR: pthread_cond_destroy() failed in main()\n");
-    } 
+    }
 }
 
-int CumulativeProb(unsigned int* seed){
-    
+int CumulativeProb(unsigned int *seed)
+{
+
     float PP[3] = {0.35, 0.25, 0.4};
     // Generate a random number between 0 and 1
     double uni = (double)rand_r(seed) / RAND_MAX;
@@ -87,9 +100,11 @@ int CumulativeProb(unsigned int* seed){
     double cumulativeProbability = 0.0;
 
     // Iterate over each pizza and its probability
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++)
+    {
         cumulativeProbability += PP[i];
-        if (uni < cumulativeProbability) {
+        if (uni < cumulativeProbability)
+        {
             return i;
         }
     }
@@ -98,18 +113,23 @@ int CumulativeProb(unsigned int* seed){
 }
 
 // Caller function
-void *callerFunc(void *t) {
-    int *id = (int *) t;
+void *callerFunc(void *t)
+{
+    int *id = (int *)t;
 
-    while (1) {
+    while (1)
+    {
         acquireLock(&TeleLock, *id, t);
-        
+
         // Check if there are available callers
-        if (Callers > 0) {
+        if (Callers > 0)
+        {
             Callers--;
             releaseLock(&TeleLock, *id, t);
             break;
-        } else {
+        }
+        else
+        {
             releaseLock(&TeleLock, *id, t);
             // If no available callers, wait
             pthread_cond_wait(&AvailableTeleCond, &TeleLock);
@@ -130,25 +150,24 @@ void *callerFunc(void *t) {
 }
 
 // Returns 1 with a probability of p and 0 with a probability of 1-p.
-int PaymentFail(unsigned int* seed){
+int PaymentFail(unsigned int *seed)
+{
     // Generate random probability between 0 and 1
-    double uni = (double) rand_r(seed) / RAND_MAX;
+    double uni = (double)rand_r(seed) / RAND_MAX;
 
     // Check if the generated probability indicates payment failure
-    if (uni < P_FAIL) 
+    if (uni < P_FAIL)
         return 1;
-    else 
+    else
         return 0;
 }
 
+void *simulateServiceFunc(void *t)
+{
 
-
-
-void *simulateServiceFunc(void *t){
-
-    struct timespec timeStarted, timeFinishedBaking, timeFinishedPacking, timeDelivered; 
+    struct timespec timeStarted, timeFinishedBaking, timeFinishedPacking, timeDelivered;
     int orderPriority, wait;
-    int* id = (int *) t; 
+    int *id = (int *)t;
     order newOrder;
 
     // Seed for thread to use rand_r().
@@ -161,12 +180,13 @@ void *simulateServiceFunc(void *t){
 
     // Get total number of pizzas to order.
     newOrder.TotalPizzas = (rand_r(&newseed) % (N_ORDERHIGH - N_ORDERLOW + 1)) + N_ORDERLOW;
-    newOrder.MargaritaPizza=0;
-    newOrder.PepperoniPizza=0;
-    newOrder.SpecialPizza=0;
+    newOrder.MargaritaPizza = 0;
+    newOrder.PepperoniPizza = 0;
+    newOrder.SpecialPizza = 0;
     // Get number of special pizzas.
     int i;
-    for (int i = 0; i< newOrder.TotalPizzas; i++){
+    for (int i = 0; i < newOrder.TotalPizzas; i++)
+    {
         switch (CumulativeProb(&newseed))
         {
         case 0:
@@ -182,9 +202,8 @@ void *simulateServiceFunc(void *t){
             break;
         }
     }
-    
-    /* END OF PART 1*/
 
+    /* END OF PART 1*/
 
     /* PART 2*/
 
@@ -194,51 +213,53 @@ void *simulateServiceFunc(void *t){
 
     // Acquire lock to update transaction counts and count of pizzas variables.
     acquireLock(&PaymentLock, *id, t);
-    
+
     // Acquire print lock to notify about transaction success/failure.
     acquireLock(&OutputLock, *id, t);
 
     // With probability P_FAIL transaction fails.
-    if (PaymentFail(&newseed)){
-        
+    if (PaymentFail(&newseed))
+    {
+
         printf("Order %d: Payment failed.\n", *id);
 
         FailedOrders++;
-        releaseLock(&OutputLock, *id,t);
-        releaseLock(&PaymentLock, *id,t);
+        releaseLock(&OutputLock, *id, t);
+        releaseLock(&PaymentLock, *id, t);
 
         pthread_exit(NULL);
-
     }
-    else{
-     printf("Order %d: Payment successful.\n", *id);
+    else
+    {
+        printf("Order %d: Payment successful.\n", *id);
         AcceptedOrders++;
 
         MargaritaPizzaCount += newOrder.MargaritaPizza;
         SpecialPizzaCount += newOrder.SpecialPizza;
         PeperoniPizzaCount += newOrder.PepperoniPizza;
-        
+
         TotalRevenue += newOrder.MargaritaPizza * C_M + newOrder.PepperoniPizza * C_P + newOrder.SpecialPizza * C_S;
 
-        releaseLock(&OutputLock, *id,t);
-        releaseLock(&PaymentLock, *id,t);
-    
+        releaseLock(&OutputLock, *id, t);
+        releaseLock(&PaymentLock, *id, t);
+
         orderPriority = priority++; // assign order priority id to order, happens here because failed orders should not receive one.
     }
-        
+
     /* END OF PART 2*/
 
-
     /* START OF PART 3*/
-    
+
     // Enforce FCFS policy.
     acquireLock(&cookPriorityLock, *id, t);
-    while(cookPriority != orderPriority){
+    while (cookPriority != orderPriority)
+    {
         pthread_cond_wait(&cookPriorityCond, &cookPriorityLock);
     }
-    
-    while (Cookers == 0){
-        pthread_cond_wait(AvailableCookCond,CookLock);
+
+    while (Cookers == 0)
+    {
+        pthread_cond_wait(&AvailableCookCond, &CookLock);
     }
 
     // Now get a cook.
@@ -255,18 +276,22 @@ void *simulateServiceFunc(void *t){
 
     /* END OF PART 3*/
 
-  // Caller Priority Update
+    // Caller Priority Update
     pthread_mutex_lock(&TelePriorityLock);
     int callPriority = TelePriority;
     releaseLock(&TelePriorityLock, *id, t);
 
     // Enforce FCFS policy for callers
-    while (1) {
+    while (1)
+    {
         acquireLock(&TelePriorityLock, *id, t);
-        if (callPriority == TelePriority) {
+        if (callPriority == TelePriority)
+        {
             releaseLock(&TelePriorityLock, *id, t);
             break;
-        } else {
+        }
+        else
+        {
             releaseLock(&TelePriorityLock, *id, t);
             pthread_cond_wait(&TelePriorityCond, &TelePriorityLock);
         }
@@ -287,10 +312,11 @@ void *simulateServiceFunc(void *t){
     pthread_exit(NULL);
 
     /* START OF PART 4 */
-    
+
     // Enforce FCFS policy.
     acquireLock(&ovenPriorityLock, *id, t);
-    while(orderPriority != ovenPriority){
+    while (orderPriority != ovenPriority)
+    {
         pthread_cond_wait(&ovenPriorityCond, &ovenPriorityLock);
     }
 
@@ -298,18 +324,19 @@ void *simulateServiceFunc(void *t){
     acquireLock(&OvenLock, *id, t);
 
     // May re-wait multiple times.
-    while( Oven < newOrder.TotalPizzas){
+    while (Oven < newOrder.TotalPizzas)
+    {
         pthread_cond_wait(&AvailableOvenCond, &OvenLock);
     }
-    
+
     Oven -= newOrder.TotalPizzas;
     releaseLock(&OvenLock, *id, t);
 
     ovenPriority += 1;
-    
+
     releaseLock(&ovenPriorityLock, *id, t);
     pthread_cond_broadcast(&ovenPriorityCond); // Notify other threads that they can "compete" for ovens. (Obv. thread with higher priority)
-    
+
     // After ovens have been acquired, release cook.
     acquireLock(&CookLock, *id, t);
     Cookers += 1;
@@ -324,14 +351,13 @@ void *simulateServiceFunc(void *t){
 
     /* END OF PART 4 */
 
-
     /* START OF PART 5 */
 
     // Enforce FCFS policy.
-   
+
     // Simulate packing time.
     sleep(T_PACK * newOrder.TotalPizzas);
-    
+
     // Get time finished packing.
     clock_gettime(CLOCK_REALTIME, &timeFinishedPacking);
 
@@ -349,18 +375,19 @@ void *simulateServiceFunc(void *t){
 
     /* END OF PART 5 */
 
-
     /* START OF PART 6 */
 
     // Enforce FCFS policy.
     acquireLock(&delivererPriorityLock, *id, t);
-    while (orderPriority != delivererPriority){
+    while (orderPriority != delivererPriority)
+    {
         pthread_cond_wait(&delivererPriorityCond, &delivererPriorityLock);
     }
 
     // Acquire deliverer.
     acquireLock(&DelivererLock, *id, t);
-    while (Deliverer == 0){
+    while (Deliverer == 0)
+    {
         pthread_cond_wait(&AvailableDelivererCond, &DelivererLock);
     }
     Deliverer -= 1;
@@ -374,7 +401,7 @@ void *simulateServiceFunc(void *t){
     // Simulate time for deliverer to reach customer.
     wait = (rand_r(&newseed) % (T_DELHIGH - T_DELLOW + 1)) + T_DELLOW;
     sleep(wait);
-    
+
     // Get time package was delivered.
     clock_gettime(CLOCK_REALTIME, &timeDelivered);
 
@@ -395,17 +422,18 @@ void *simulateServiceFunc(void *t){
 
     /* END OF PART 6*/
 
-
     /* START OF PART 7 */
 
     // Calculate cooling time (from time that order finished baking, up to time that order was delivered)
     double coolingTime = ((timeDelivered.tv_sec - timeFinishedBaking.tv_sec) + (double)(timeDelivered.tv_nsec - timeFinishedBaking.tv_nsec) / 1e9) / 60.0;
-    
+
     acquireLock(&StatisticsLock, *id, t);
 
     // So that we can find max cooling time and max order completion time.
-    if (orderCompletionTime > maxOrderCompletionTime) maxOrderCompletionTime = orderCompletionTime;
-    if (coolingTime > maxCoolingTime) maxCoolingTime = coolingTime;
+    if (orderCompletionTime > maxOrderCompletionTime)
+        maxOrderCompletionTime = orderCompletionTime;
+    if (coolingTime > maxCoolingTime)
+        maxCoolingTime = coolingTime;
 
     // So that we can calculate mean order completion time and mean cooling time.
     orderCompletionTimeSum += orderCompletionTime;
@@ -415,11 +443,11 @@ void *simulateServiceFunc(void *t){
 
     /* END OF PART 7*/
 
-
     pthread_exit(t);
 }
 
-int main(int argc, char* argv[]){
+int main(int argc, char *argv[])
+{
 
     int customers;
 
@@ -441,9 +469,10 @@ int main(int argc, char* argv[]){
     initializeCondition(&AvailableCookCond);
     initializeCondition(&AvailableOvenCond);
     initializeCondition(&AvailableDelivererCond);
-    
+
     // Check if correct count of arguments is provided.
-    if (argc != 3){
+    if (argc != 3)
+    {
         printf("Error: Not enough arguments provided. (Number of Customers and initial seed is required.)\n");
         exit(-1);
     }
@@ -451,18 +480,20 @@ int main(int argc, char* argv[]){
     customers = atoi(argv[1]);
     seed = atoi(argv[2]);
 
-    if (customers <= 0){
+    if (customers <= 0)
+    {
         printf("Error: Number of customers should be positive.\n");
         exit(-1);
     }
-    
+
     // Allocate memory for array of threads.
-    pthread_t *threads = (pthread_t *) malloc(customers * sizeof(pthread_t));
-    if (threads == NULL){
+    pthread_t *threads = (pthread_t *)malloc(customers * sizeof(pthread_t));
+    if (threads == NULL)
+    {
         printf("Out of memory!");
         exit(-1);
     }
-    
+
     // In order to use rand_r in main().
     unsigned int newseed = seed;
 
@@ -471,10 +502,12 @@ int main(int argc, char* argv[]){
     int wait = 0;
     int oids[customers];
 
-    for (i = 0; i < customers; i++){
+    for (i = 0; i < customers; i++)
+    {
         oids[i] = i + 1;
-        
-        if (pthread_create(&threads[i], NULL, &simulateServiceFunc, &oids[i]) != 0) {
+
+        if (pthread_create(&threads[i], NULL, &simulateServiceFunc, &oids[i]) != 0)
+        {
             printf("ERROR: Thread creation failed in main()\n");
             exit(-1);
         }
@@ -482,20 +515,22 @@ int main(int argc, char* argv[]){
         // Sleep for random time to simulate time for new customer to connect.
         wait = (rand_r(&seed) % (T_ORDERHIGH - T_ORDERLOW + 1)) + T_ORDERLOW;
         sleep(wait);
-        
     }
 
     // Wait for threads to terminate.
-    for (i = 0; i < customers; i++){
-        if (pthread_join(threads[i], NULL) != 0){
+    for (i = 0; i < customers; i++)
+    {
+        if (pthread_join(threads[i], NULL) != 0)
+        {
             printf("ERROR: pthread_join() failed in main()\n");
         }
     }
 
     /* PRINT STATS */
-    if (AcceptedOrders > 0){
-        //printf("Total specials sold: %d\n", totalSpecialSold);
-        //printf("Total plain sold %d\n", totalPlainSold);
+    if (AcceptedOrders > 0)
+    {
+        // printf("Total specials sold: %d\n", totalSpecialSold);
+        // printf("Total plain sold %d\n", totalPlainSold);
         printf("Total income: %d\n", TotalRevenue);
         printf("Total transactions: %d\n", AcceptedOrders + FailedOrders);
         printf("Failed transaction count: %d\n", FailedOrders);
@@ -503,10 +538,11 @@ int main(int argc, char* argv[]){
         printf("Max order completion time: %f\n", maxOrderCompletionTime);
         printf("Mean cooling time: %f\n", coolingTimeSum / AcceptedOrders);
         printf("Max cooling time: %f\n", maxCoolingTime);
-    }else{
+    }
+    else
+    {
         printf("There was no succesful transaction.\n");
     }
-    
 
     // Destroy locks.
     destroyLock(&OutputLock);
