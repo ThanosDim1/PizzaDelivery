@@ -195,7 +195,7 @@ void *simulateServiceFunc(void *t)
     else
     {
         printf("Order %d: Payment successful.\n", *id);
-        printf("Order %d: %d Margarita, %d Pepperoni, %d Special pizzas ordered.\n", *id, newOrder.MargaritaPizza, newOrder.PepperoniPizza, newOrder.SpecialPizza);
+        // printf("Order %d: %d Margarita, %d Pepperoni, %d Special pizzas ordered.\n", *id, newOrder.MargaritaPizza, newOrder.PepperoniPizza, newOrder.SpecialPizza);
         AcceptedOrders++;
 
         MargaritaPizzaCount += newOrder.MargaritaPizza;
@@ -213,6 +213,7 @@ void *simulateServiceFunc(void *t)
     /* END OF PART 2*/
 
     /* START OF PART 3*/
+    printf("number of cookers: %d\n", Cookers);
 
     while (Cookers == 0)
     {
@@ -229,18 +230,19 @@ void *simulateServiceFunc(void *t)
     // Simulate pizza preparation time.
     sleep(T_PREP * newOrder.TotalPizzas);
 
+    // Get enough ovens. (one for each pizza ordered)
+    acquireLock(&OvenLock, *id, t);
+
     acquireLock(&CookLock, *id, t);
     Cookers += 1;
     releaseLock(&CookLock, *id, t);
-    pthread_cond_broadcast(&AvailableCookCond); // At most one thread is waiting for cook at each point in time. (FCFS Policy)
-
-    // Get enough ovens. (one for each pizza ordered)
-    acquireLock(&OvenLock, *id, t);
+    pthread_cond_broadcast(&AvailableCookCond);
 
     // May re-wait multiple times.
     while (Oven < newOrder.TotalPizzas)
     {
         pthread_cond_wait(&AvailableOvenCond, &OvenLock);
+        printf("Order %d: Waiting for oven.\n", *id);
     }
 
     Oven -= newOrder.TotalPizzas;
@@ -250,10 +252,6 @@ void *simulateServiceFunc(void *t)
     // Simulate baking time.
     sleep(T_BAKE);
 
-    acquireLock(&OvenLock, *id, t);
-    Oven += newOrder.TotalPizzas;
-    releaseLock(&OvenLock, *id, t);
-    pthread_cond_signal(&AvailableOvenCond);
     // Get time when baking finished.
     clock_gettime(CLOCK_REALTIME, &timeFinishedBaking);
 
@@ -273,7 +271,7 @@ void *simulateServiceFunc(void *t)
     // At most one thread is waiting for ovens at each point in time (FCFS Policy).
 
     // Print message stating total time for order with <oid> to get ready. (time from customer order up to time packing was finished)
-    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9);
+    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0;
     acquireLock(&OutputLock, *id, t);
     printf("Order with number %d was prepared in %f minutes.\n", *id, orderPreparationTimeMinutes);
     releaseLock(&OutputLock, *id, t);
@@ -283,14 +281,22 @@ void *simulateServiceFunc(void *t)
     /* START OF PART 6 */
 
     // Acquire deliverer.
+    printf("number of deliverers: %d\n", Deliverer);
     acquireLock(&DelivererLock, *id, t);
     while (Deliverer == 0)
     {
         pthread_cond_wait(&AvailableDelivererCond, &DelivererLock);
+        printf("Order %d: Waiting for deliverer.\n", *id);
     }
+
+    acquireLock(&OvenLock, *id, t);
+    Oven += newOrder.TotalPizzas;
+    releaseLock(&OvenLock, *id, t);
+    pthread_cond_signal(&AvailableOvenCond);
 
     Deliverer -= 1;
     releaseLock(&DelivererLock, *id, t);
+    pthread_cond_broadcast(&AvailableDelivererCond);
 
     // Simulate time for deliverer to reach customer.
     wait = (rand_r(&newseed) % (T_DELHIGH - T_DELLOW + 1)) + T_DELLOW;
