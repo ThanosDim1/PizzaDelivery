@@ -172,6 +172,13 @@ void *simulateServiceFunc(void *t)
         FailedOrders++;
         releaseLock(&OutputLock, *id, t);
         releaseLock(&PaymentLock, *id, t);
+
+        // Release the caller after failure of payment
+        acquireLock(&CallerLock, *id, t);
+        Callers += 1;
+        releaseLock(&CallerLock, *id, t);
+        pthread_cond_broadcast(&AvailableCallerCond); // Signal availability of callers to other threads
+
         pthread_exit(NULL); // Exit thread if payment fails
     }
     else
