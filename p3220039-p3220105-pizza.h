@@ -1,7 +1,8 @@
-int seed;                    // Seed for random number generation
-float AverageWaitTime;       // Average wait time for orders
-int MaxWaitTime;             // Maximum wait time for orders
-float AverageColdTime;       // Average cooling time for orders
+int seed;                 // Seed for random number generation
+float AverageWaitTime;    // Average wait time for orders
+int MaxWaitTime;          // Maximum wait time for orders
+float AverageCoolingTime; // Average cooling time for orders
+float AverageCompletionTime;
 int MaxColdTime;             // Maximum cooling time for orders
 int MargaritaPizzaCount = 0; // Count of Margarita pizzas
 int PeperoniPizzaCount = 0;  // Count of Pepperoni pizzas

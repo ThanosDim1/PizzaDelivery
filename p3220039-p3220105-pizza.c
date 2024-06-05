@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "PizzaDelivery.h"
+#include "p3220039-p3220105-pizza.h"
 #include <time.h>
 
 // Global variables for the number of cookers, oven, callers, and deliverers
@@ -41,21 +41,21 @@ void initializeCondition(pthread_cond_t *cond)
 }
 
 // Function to acquire a lock
-void acquireLock(pthread_mutex_t *mutex, int oid, int *t)
+void acquireLock(pthread_mutex_t *mutex, int id, int *t)
 {
     if (pthread_mutex_lock(mutex) != 0)
     {
-        printf("ERROR: pthread_mutex_lock() failed in thread %d\n", oid);
+        printf("ERROR: pthread_mutex_lock() failed in thread %d\n", id);
         exit(*t);
     }
 }
 
 // Function to release a lock
-void releaseLock(pthread_mutex_t *mutex, int oid, int *t)
+void releaseLock(pthread_mutex_t *mutex, int id, int *t)
 {
     if (pthread_mutex_unlock(mutex) != 0)
     {
-        printf("ERROR: pthread_mutex_unlock() failed in thread %d\n", oid);
+        printf("ERROR: pthread_mutex_unlock() failed in thread %d\n", id);
         exit(*t);
     }
 }
@@ -105,7 +105,7 @@ int PaymentFail(unsigned int *seed)
         return 0; // Payment succeeds
 }
 
-void *simulateServiceFunc(void *t)
+void *services(void *t)
 {
 
     // Declare variables for time tracking, waiting time, thread id, and order details
@@ -168,7 +168,7 @@ void *simulateServiceFunc(void *t)
     // Check if payment fails
     if (PaymentFail(&newseed))
     {
-        printf("Order %d: Payment failed.\n", *id);
+        printf("Order %d: Payment failed. Order rejected.\n", *id);
         FailedOrders++;
         releaseLock(&OutputLock, *id, t);
         releaseLock(&PaymentLock, *id, t);
@@ -184,7 +184,7 @@ void *simulateServiceFunc(void *t)
     else
     {
         // Payment successful
-        printf("Order %d: Payment successful.\n", *id);
+        printf("Order %d: Payment successful. Order accepted.\n ------------------------------------------\n", *id);
         AcceptedOrders++;
 
         // Update counts and revenue based on the order
@@ -245,9 +245,15 @@ void *simulateServiceFunc(void *t)
     clock_gettime(CLOCK_REALTIME, &timeFinishedPacking); // Record time after packing
 
     // Calculate order preparation time and print
-    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0;
+    double orderPreparationTimeMinutes = ((timeFinishedPacking.tv_sec - timeStarted.tv_sec) + (double)(timeFinishedPacking.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0 * 100;
+    int lastTwoDigits = (int)(orderPreparationTimeMinutes * 100) % 100;
+    if (lastTwoDigits >= 60)
+    {
+        orderPreparationTimeMinutes += 0.4;
+    }
+
     acquireLock(&OutputLock, *id, t);
-    printf("Order with number %d was prepared in %f minutes.\n", *id, orderPreparationTimeMinutes);
+    printf("Order with number %d was prepared in %.2f minutes.\n ------------------------------------------\n", *id, orderPreparationTimeMinutes);
     releaseLock(&OutputLock, *id, t);
 
     // Acquire lock for the deliverer
@@ -274,11 +280,16 @@ void *simulateServiceFunc(void *t)
     wait = (rand_r(&newseed) % (T_DELHIGH - T_DELLOW + 1)) + T_DELLOW;
     sleep(wait);
     clock_gettime(CLOCK_REALTIME, &timeDelivered); // Record time after delivery
-    double orderCompletionTime = ((timeDelivered.tv_sec - timeStarted.tv_sec) + (double)(timeDelivered.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0;
+    double orderCompletionTime = ((timeDelivered.tv_sec - timeStarted.tv_sec) + (double)(timeDelivered.tv_nsec - timeStarted.tv_nsec) / 1e9) / 60.0 * 100;
+    lastTwoDigits = (int)(orderCompletionTime * 100) % 100;
+    if (lastTwoDigits >= 60)
+    {
+        orderCompletionTime += 0.4;
+    }
 
     // Print order delivery time
     acquireLock(&OutputLock, *id, t);
-    printf("Order with number %d was delivered in %f minutes.\n", *id, orderCompletionTime);
+    printf("Order with number %d was delivered in %.2f minutes.\n ------------------------------------------\n", *id, orderCompletionTime);
     releaseLock(&OutputLock, *id, t);
 
     sleep(wait);
@@ -290,14 +301,26 @@ void *simulateServiceFunc(void *t)
     pthread_cond_broadcast(&AvailableDelivererCond); // Signal availability of deliverers to other threads
 
     // Calculate and update statistics
-    double coolingTime = ((timeDelivered.tv_sec - timeFinishedBaking.tv_sec) + (double)(timeDelivered.tv_nsec - timeFinishedBaking.tv_nsec) / 1e9) / 60.0;
+    double coolingTime = ((timeDelivered.tv_sec - timeFinishedBaking.tv_sec) + (double)(timeDelivered.tv_nsec - timeFinishedBaking.tv_nsec) / 1e9) / 60.0 * 100;
     acquireLock(&StatisticsLock, *id, t);
     if (orderCompletionTime > maxOrderCompletionTime)
         maxOrderCompletionTime = orderCompletionTime;
     if (coolingTime > maxCoolingTime)
         maxCoolingTime = coolingTime;
     orderCompletionTimeSum += orderCompletionTime;
+    AverageCompletionTime = orderCompletionTimeSum / AcceptedOrders;
+    lastTwoDigits = (int)(AverageCompletionTime * 100) % 100;
+    if (lastTwoDigits >= 60)
+    {
+        AverageCompletionTime += 0.4;
+    }
     coolingTimeSum += coolingTime;
+    AverageCoolingTime = coolingTimeSum / AcceptedOrders;
+    lastTwoDigits = (int)(AverageCoolingTime * 100) % 100;
+    if (lastTwoDigits >= 60)
+    {
+        AverageCoolingTime += 0.4;
+    }
     releaseLock(&StatisticsLock, *id, t);
 
     pthread_exit(t); // Exit the thread
@@ -358,7 +381,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < customers; i++)
     {
         ids[i] = i + 1;
-        if (pthread_create(&threads[i], NULL, &simulateServiceFunc, &ids[i]) != 0)
+        if (pthread_create(&threads[i], NULL, &services, &ids[i]) != 0)
         {
             printf("ERROR: Thread creation failed in main()\n");
             exit(-1);
@@ -381,16 +404,19 @@ int main(int argc, char *argv[])
     // Print statistics if there were accepted orders
     if (AcceptedOrders > 0)
     {
-        printf("Total income: %d\n", TotalRevenue);
-        printf("Margarita pizza count: %d\n", MargaritaPizzaCount);
-        printf("Pepperoni pizza count: %d\n", PeperoniPizzaCount);
-        printf("Special pizza count: %d\n", SpecialPizzaCount);
-        printf("Accepted transaction count: %d\n", AcceptedOrders);
-        printf("Failed transaction count: %d\n", FailedOrders);
-        printf("Mean order completion time: %f\n", orderCompletionTimeSum / AcceptedOrders);
-        printf("Max order completion time: %f\n", maxOrderCompletionTime);
-        printf("Mean cooling time: %f\n", coolingTimeSum / AcceptedOrders);
-        printf("Max cooling time: %f\n", maxCoolingTime);
+        printf("Statistics:\n");
+        printf("------------------------------------------------\n");
+        printf("| %-30s | %10d |\n", "Total revenue", TotalRevenue);
+        printf("| %-30s | %10d |\n", "Margarita pizza count", MargaritaPizzaCount);
+        printf("| %-30s | %10d |\n", "Pepperoni pizza count", PeperoniPizzaCount);
+        printf("| %-30s | %10d |\n", "Special pizza count", SpecialPizzaCount);
+        printf("| %-30s | %10d |\n", "Accepted orders count", AcceptedOrders);
+        printf("| %-30s | %10d |\n", "Failed orders count", FailedOrders);
+        printf("| %-30s | %10.2f |\n", "Average order completion time", AverageCompletionTime);
+        printf("| %-30s | %10.2f |\n", "Max order completion time", maxOrderCompletionTime);
+        printf("| %-30s | %10.2f |\n", "Average cooling time", AverageCoolingTime);
+        printf("| %-30s | %10.2f |\n", "Max cooling time", maxCoolingTime);
+        printf("------------------------------------------------\n");
     }
     else
     {
