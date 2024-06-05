@@ -33,5 +33,9 @@ _The first variable is the seed and the second the number of customers_
 ## License
 This project is licensed under the MIT License.
 
+## Creators
+### Thanos Dimitrakopoulos
+### Andreas Lampos
+
 
 
