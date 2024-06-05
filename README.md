@@ -23,11 +23,11 @@ This project implements a pizza scheduling system using POSIX threads (`pthread`
    gcc -pthread -o p3220039-p3220105-pizza.c
 
 ## Usage 
-./a.out 10 100
+./a.out 10 100 \n
 _The first variable is the seed and the second the number of customers_
 
 ## File Structure
--p3220039-p3220105-pizza.c: Main source file containing the implementation
+-p3220039-p3220105-pizza.c: Main source file containing the implementation \n
 -p3220039-p3220105-pizza.h: Header file with function declarations and data structures
 
 ## License
